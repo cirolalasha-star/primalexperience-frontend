@@ -1,13 +1,11 @@
 // src/pages/Registro.tsx
-// 👇 FormEvent se importa como *type*
+// 👇 FormEvent se importa como *type* (solo tipo)
 import type { FormEvent } from "react";
 import { useState } from "react";
-// useLocation no se usa → fuera
 import { Link, useNavigate } from "react-router-dom";
 
 import { apiPost } from "../api/client";
 import { useAuth, type User } from "../context/AuthContext";
-
 
 const gold = "#B8860B";
 const dark = "#020202";
@@ -28,35 +26,51 @@ export default function Registro() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  async function handleSubmit(e: FormEvent) {
+  // ⬇️ Manejador del submit con errores “bonitos”
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    // Evitamos recarga del navegador
     e.preventDefault();
+
+    // Limpiamos error anterior
     setError(null);
 
+    // Validación básica en cliente
     if (password !== password2) {
       setError("Las contraseñas no coinciden.");
       return;
     }
 
-    setLoading(true);
-
     try {
+      // Marcamos estado de carga
+      setLoading(true);
+
+      // Llamada al backend -> POST /auth/registro
       const data = await apiPost<AuthResponse>("/auth/registro", {
         nombre,
         email,
         password,
       });
 
+      // Guardamos token y usuario en el contexto
       localStorage.setItem("token", data.token);
       login(data.usuario);
 
+      // Redirigimos al área privada
       navigate("/mi-cuenta");
-    } catch (err) {
-      console.error(err);
-      setError("No se ha podido crear la cuenta. Prueba con otro email.");
+    } catch (err: unknown) {
+      console.error("Error en registro:", err);
+
+      // Si apiPost lanzó un Error con mensaje del backend, lo mostramos
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Error desconocido al crear la cuenta.");
+      }
     } finally {
+      // Quitamos el estado de carga siempre
       setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="max-w-md mx-auto px-4 py-10 text-white">
@@ -124,11 +138,7 @@ export default function Registro() {
           />
         </div>
 
-        {error && (
-          <p className="text-sm text-red-400">
-            {error}
-          </p>
-        )}
+        {error && <p className="text-sm text-red-400">{error}</p>}
 
         <button
           type="submit"

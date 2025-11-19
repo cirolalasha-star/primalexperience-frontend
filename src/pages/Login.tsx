@@ -1,11 +1,11 @@
 // src/pages/Login.tsx
-// 👇 FormEvent se importa como *type*
+// 👇 FormEvent como *type-only import*
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+
 import { apiPost } from "../api/client";
 import { useAuth, type User } from "../context/AuthContext";
-
 
 const gold = "#B8860B";
 const dark = "#020202";
@@ -25,31 +25,42 @@ export default function Login() {
   const location = useLocation();
   const { login } = useAuth();
 
+  // Si viene ?redirect=/algo, volvemos ahí tras login
   const params = new URLSearchParams(location.search);
   const redirectTo = params.get("redirect") || "/mi-cuenta";
 
-  async function handleSubmit(e: FormEvent) {
+  // ⬇️ Manejador del submit con errores “bonitos”
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
+      // POST /auth/login
       const data = await apiPost<AuthResponse>("/auth/login", {
         email,
         password,
       });
 
+      // Guardamos token + usuario en contexto
       localStorage.setItem("token", data.token);
       login(data.usuario);
 
+      // Redirigimos a donde tocaba
       navigate(redirectTo);
-    } catch (err) {
-      console.error(err);
-      setError("Credenciales incorrectas o error en el servidor.");
+    } catch (err: unknown) {
+      console.error("Error en login:", err);
+
+      // Mostramos mensaje real si viene de apiPost
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Error desconocido al iniciar sesión.");
+      }
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="max-w-md mx-auto px-4 py-10 text-white">
@@ -90,11 +101,7 @@ export default function Login() {
           />
         </div>
 
-        {error && (
-          <p className="text-sm text-red-400">
-            {error}
-          </p>
-        )}
+        {error && <p className="text-sm text-red-400">{error}</p>}
 
         <button
           type="submit"

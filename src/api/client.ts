@@ -52,12 +52,29 @@ export async function apiPost<T>(endpoint: string, data: any): Promise<T> {
   });
 
   if (!res.ok) {
-    const msg = await res.text();
-    throw new Error(`Error ${res.status}: ${msg}`);
+    // ⬇️ Intentamos sacar un mensaje útil del backend
+    let message = `Error ${res.status}`;
+
+    try {
+      const text = await res.text();
+      if (text) {
+        try {
+          const json = JSON.parse(text);
+          message = json.message ?? text;
+        } catch {
+          message = text;
+        }
+      }
+    } catch {
+      // si algo falla aquí dejamos el mensaje por defecto
+    }
+
+    throw new Error(message);
   }
 
   return (await res.json()) as T;
 }
+
 
 
 
