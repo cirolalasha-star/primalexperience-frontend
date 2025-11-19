@@ -1,204 +1,252 @@
 // src/components/Navbar.tsx
-import { useContext, useState } from "react";
-import { Link } from "react-router-dom";
-import { AuthContext } from "../context/AuthContext";
+/**
+ * ·Navegación limpia en desktop
+ * ·Menú móvil que solo tapa la pantalla cuando está abierto
+ * ·En función de user.rol aparecen "Panel guía" y "Admin"
+ * ·Login/Registro si no hay usuarios, "Cerrar sesión" si lo hay
+ */
+import { useState } from "react";
+// Link no se usa → lo quitamos
+import { NavLink, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
-// 🎨 Colores corporativos
 const gold = "#B8860B";
-const dark = "#1A1A1A";
+const dark = "#020202";
 
 export default function Navbar() {
-  // ⛑️ El contexto puede ser null → lo validamos
-  const auth = useContext(AuthContext);
-  if (!auth) return null; // evita errores de TS al desestructurar
-
-  const { user, logout } = auth;
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    localStorage.removeItem("token");
+    setOpen(false);
+    navigate("/");
+  };
+
+  const closeMenu = () => setOpen(false);
+
+  const linkBase =
+    "text-sm font-medium tracking-wide transition-colors hover:text-white";
+
+  const renderMainLinks = (extraClasses = "") => (
+    <div className={`flex gap-6 items-center ${extraClasses}`}>
+      <NavLink
+        to="/experiencias"
+        onClick={closeMenu}
+        className={({ isActive }) =>
+          `${linkBase} ${
+            isActive ? "text-white" : "text-gray-300"
+          }`
+        }
+      >
+        Experiencias
+      </NavLink>
+      <NavLink
+        to="/destinos"
+        onClick={closeMenu}
+        className={({ isActive }) =>
+          `${linkBase} ${
+            isActive ? "text-white" : "text-gray-300"
+          }`
+        }
+      >
+        Destinos
+      </NavLink>
+      <NavLink
+        to="/como-funciona"
+        onClick={closeMenu}
+        className={({ isActive }) =>
+          `${linkBase} ${
+            isActive ? "text-white" : "text-gray-300"
+          }`
+        }
+      >
+        Cómo funciona
+      </NavLink>
+    </div>
+  );
+
+  const renderUserLinks = (extraClasses = "") => {
+    if (!user) return null;
+
+    return (
+      <div className={`flex gap-4 items-center ${extraClasses}`}>
+        <NavLink
+          to="/mis-reservas"
+          onClick={closeMenu}
+          className={({ isActive }) =>
+            `${linkBase} ${
+              isActive ? "text-white" : "text-gray-300"
+            }`
+          }
+        >
+          Mis reservas
+        </NavLink>
+        <NavLink
+          to="/mi-cuenta"
+          onClick={closeMenu}
+          className={({ isActive }) =>
+            `${linkBase} ${
+              isActive ? "text-white" : "text-gray-300"
+            }`
+          }
+        >
+          Mi cuenta
+        </NavLink>
+      </div>
+    );
+  };
+
+  const renderRoleLinks = (extraClasses = "") => {
+    if (!user) return null;
+
+    return (
+      <div className={`flex gap-4 items-center ${extraClasses}`}>
+        {user.rol === "guia" && (
+          <NavLink
+            to="/guia/panel"
+            onClick={closeMenu}
+            className={({ isActive }) =>
+              `${linkBase} ${
+                isActive ? "text-white" : "text-gray-300"
+              }`
+            }
+          >
+            Panel guía
+          </NavLink>
+        )}
+        {user.rol === "admin" && (
+          <NavLink
+            to="/admin/dashboard"
+            onClick={closeMenu}
+            className={({ isActive }) =>
+              `${linkBase} ${
+                isActive ? "text-white" : "text-gray-300"
+              }`
+            }
+          >
+            Admin
+          </NavLink>
+        )}
+      </div>
+    );
+  };
 
   return (
     <nav
-      style={{
-        background: dark,
-        color: "white",
-        padding: "0.7rem 1.2rem",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        borderBottom: `2px solid ${gold}`,
-      }}
+      className="sticky top-0 z-40 bg-black/90 backdrop-blur border-b"
+      style={{ borderColor: gold }}
     >
-      {/* 🦅 LOGO + NOMBRE */}
-      <Link
-        to="/"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          textDecoration: "none",
-          color: "white",
-          fontSize: "1.2rem",
-          fontWeight: 700,
-        }}
-      >
-        <img
-          src="/logo-primal.png"
-          alt="Primal Experience"
-          style={{ width: 40, marginRight: 10 }}
-        />
-        PRIMAL EXPERIENCE
-      </Link>
+      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        {/* LOGO */}
+        <button
+          onClick={() => {
+            navigate("/");
+            closeMenu();
+          }}
+          className="flex items-center gap-2 text-left"
+        >
+          <div className="w-9 h-9 rounded-full border flex items-center justify-center text-xs font-bold"
+               style={{ borderColor: gold }}>
+            PE
+          </div>
+          <div className="leading-tight">
+            <p className="text-xs text-gray-300 uppercase tracking-[0.2em]">
+              Ecoturismo responsable
+            </p>
+            <p className="text-sm md:text-base font-semibold">
+              PRIMAL EXPERIENCE
+            </p>
+          </div>
+        </button>
 
-      {/* 📱 Botón hamburguesa móvil */}
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          fontSize: "1.5rem",
-          background: "none",
-          color: "white",
-          border: "none",
-          display: "none",
-        }}
-        className="menu-btn"
-      >
-        ☰
-      </button>
+        {/* MENU DESKTOP */}
+        <div className="hidden md:flex items-center gap-8">
+          {renderMainLinks()}
+          {renderUserLinks()}
+          {renderRoleLinks()}
 
-      {/* 🔗 Menú principal */}
-      <ul
-        className={`menu ${open ? "open" : ""}`}
-        style={{
-          listStyle: "none",
-          display: "flex",
-          gap: "1.5rem",
-          alignItems: "center",
-          margin: 0,
-        }}
-      >
-        <li>
-          <Link to="/tours" style={{ color: "white", textDecoration: "none" }}>
-            Experiencias
-          </Link>
-        </li>
-
-        <li>
-          <Link to="/destinos" style={{ color: "white", textDecoration: "none" }}>
-            Destinos
-          </Link>
-        </li>
-
-        <li>
-          <Link
-            to="/como-funciona"
-            style={{ color: "white", textDecoration: "none" }}
-          >
-            Cómo funciona
-          </Link>
-        </li>
-
-        {/* 👤 Zona autenticada */}
-        {user ? (
-          <>
-            {/* 🔥 Roles */}
-            {user.rol === "admin" && (
-              <li>
-                <Link
-                  to="/admin/dashboard"
-                  style={{ color: gold, textDecoration: "none" }}
-                >
-                  Admin
-                </Link>
-              </li>
-            )}
-
-            {user.rol === "guia" && (
-              <li>
-                <Link
-                  to="/guia/panel"
-                  style={{ color: gold, textDecoration: "none" }}
-                >
-                  Panel Guía
-                </Link>
-              </li>
-            )}
-
-            <li>
-              <Link
-                to="/mi-cuenta"
-                style={{ color: "white", textDecoration: "none" }}
-              >
-                Mi Cuenta
-              </Link>
-            </li>
-
-            <li>
+          {!user ? (
+            <div className="flex items-center gap-4">
               <button
-                onClick={logout}
-                style={{
-                  background: gold,
-                  border: "none",
-                  color: dark,
-                  padding: "0.3rem 0.8rem",
-                  fontWeight: 600,
-                  borderRadius: 4,
-                  cursor: "pointer",
-                }}
-              >
-                Logout
-              </button>
-            </li>
-          </>
-        ) : (
-          <>
-            <li>
-              <Link
-                to="/login"
-                style={{ color: gold, textDecoration: "none", fontWeight: 600 }}
+                className="text-sm font-medium text-gray-200 hover:text-white"
+                onClick={() => navigate("/login")}
               >
                 Login
-              </Link>
-            </li>
-            <li>
-              <Link
-                to="/registro"
-                style={{
-                  background: gold,
-                  color: dark,
-                  padding: "0.3rem 0.8rem",
-                  borderRadius: 4,
-                  textDecoration: "none",
-                  fontWeight: 700,
-                }}
+              </button>
+              <button
+                className="px-4 py-1.5 rounded-full text-sm font-semibold shadow-lg"
+                style={{ backgroundColor: gold, color: dark }}
+                onClick={() => navigate("/registro")}
               >
                 Registrarse
-              </Link>
-            </li>
-          </>
-        )}
-      </ul>
+              </button>
+            </div>
+          ) : (
+            <button
+              className="text-sm font-medium text-gray-300 hover:text-white"
+              onClick={handleLogout}
+            >
+              Cerrar sesión
+            </button>
+          )}
+        </div>
 
-      {/* 📱 Responsive */}
-      <style>
-        {`
-          @media (max-width: 768px) {
-            .menu-btn {
-              display: block !important;
-            }
-            .menu {
-              position: absolute;
-              top: 60px;
-              right: 0;
-              background: ${dark};
-              width: 70%;
-              flex-direction: column;
-              padding: 1rem;
-              border-left: 2px solid ${gold};
-              display: none;
-            }
-            .menu.open {
-              display: flex;
-            }
-          }
-        `}
-      </style>
+        {/* BOTÓN MENU MOBILE */}
+        <button
+          className="md:hidden inline-flex items-center justify-center w-9 h-9 border rounded-full border-gray-600"
+          onClick={() => setOpen((v) => !v)}
+          aria-label="Abrir menú"
+        >
+          <span className="w-4 h-[2px] bg-gray-200 block mb-[4px]" />
+          <span className="w-4 h-[2px] bg-gray-200 block mb-[4px]" />
+          <span className="w-4 h-[2px] bg-gray-200 block" />
+        </button>
+      </div>
+
+      {/* MENU MOBILE */}
+      {open && (
+        <div className="md:hidden border-t border-[#222] bg-black/95">
+          <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col gap-4">
+            {renderMainLinks("flex-col items-start gap-3")}
+            {renderUserLinks("flex-col items-start gap-2")}
+            {renderRoleLinks("flex-col items-start gap-2")}
+
+            {!user ? (
+              <div className="flex flex-col gap-3 pt-2">
+                <button
+                  className="text-sm font-medium text-gray-200 text-left"
+                  onClick={() => {
+                    navigate("/login");
+                    closeMenu();
+                  }}
+                >
+                  Login
+                </button>
+                <button
+                  className="px-4 py-2 rounded-full text-sm font-semibold text-left"
+                  style={{ backgroundColor: gold, color: dark }}
+                  onClick={() => {
+                    navigate("/registro");
+                    closeMenu();
+                  }}
+                >
+                  Registrarse
+                </button>
+              </div>
+            ) : (
+              <button
+                className="mt-2 text-sm font-medium text-gray-200 text-left"
+                onClick={handleLogout}
+              >
+                Cerrar sesión
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </nav>
   );
 }

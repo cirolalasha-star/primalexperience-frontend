@@ -1,72 +1,117 @@
+// src/pages/Login.tsx
+// 👇 FormEvent se importa como *type*
+import type { FormEvent } from "react";
 import { useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { apiPost } from "../api/client";
-//Usa client.ts y guarda el token JWT automáticamente
+import { useAuth, type User } from "../context/AuthContext";
+
+
+const gold = "#B8860B";
+const dark = "#020202";
+
+interface AuthResponse {
+  token: string;
+  usuario: User;
+}
+
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  async function handleLogin(e: React.FormEvent) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { login } = useAuth();
+
+  const params = new URLSearchParams(location.search);
+  const redirectTo = params.get("redirect") || "/mi-cuenta";
+
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setError("");
+    setError(null);
+    setLoading(true);
 
     try {
-      const data = await apiPost<{ token: string }>("/auth/login", {
+      const data = await apiPost<AuthResponse>("/auth/login", {
         email,
         password,
       });
 
-      // 💾 Guarda el token en el navegador
       localStorage.setItem("token", data.token);
+      login(data.usuario);
 
-      alert("✅ Login exitoso");
-      window.location.href = "/tours"; // Redirige tras login
-    } catch (err: any) {
-      console.error("Error en login:", err);
-      setError("❌ Credenciales incorrectas o servidor no disponible");
+      navigate(redirectTo);
+    } catch (err) {
+      console.error(err);
+      setError("Credenciales incorrectas o error en el servidor.");
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <div style={{ maxWidth: 400, margin: "4rem auto", textAlign: "center" }}>
-      <h1>Iniciar sesión</h1>
-      <form onSubmit={handleLogin}>
-        <div style={{ marginBottom: "1rem" }}>
+    <div className="max-w-md mx-auto px-4 py-10 text-white">
+      <h1 className="text-2xl font-bold mb-2">Iniciar sesión</h1>
+      <p className="text-sm text-gray-300 mb-6">
+        Accede a tus reservas y datos personales.
+      </p>
+
+      <form
+        onSubmit={handleSubmit}
+        className="bg-[#050505] border border-[#222] rounded-2xl p-4 space-y-4"
+      >
+        <div>
+          <label className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">
+            Email
+          </label>
           <input
             type="email"
-            placeholder="Correo electrónico"
+            required
+            autoComplete="email"
+            className="w-full rounded-lg px-3 py-2 bg-black/70 border border-gray-600 text-sm focus:outline-none focus:border-gray-300"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            required
-            style={{ width: "100%", padding: "0.5rem" }}
           />
         </div>
-        <div style={{ marginBottom: "1rem" }}>
+
+        <div>
+          <label className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">
+            Contraseña
+          </label>
           <input
             type="password"
-            placeholder="Contraseña"
+            required
+            autoComplete="current-password"
+            className="w-full rounded-lg px-3 py-2 bg-black/70 border border-gray-600 text-sm focus:outline-none focus:border-gray-300"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            required
-            style={{ width: "100%", padding: "0.5rem" }}
           />
         </div>
+
+        {error && (
+          <p className="text-sm text-red-400">
+            {error}
+          </p>
+        )}
+
         <button
           type="submit"
-          style={{
-            padding: "0.5rem 1rem",
-            backgroundColor: "#4CAF50",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-          }}
+          disabled={loading}
+          className="w-full py-2 rounded-full text-sm font-semibold mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
+          style={{ backgroundColor: gold, color: dark }}
         >
-          Entrar
+          {loading ? "Accediendo..." : "Iniciar sesión"}
         </button>
       </form>
 
-      {error && <p style={{ color: "red", marginTop: "1rem" }}>{error}</p>}
+      <p className="text-xs text-gray-300 mt-4">
+        ¿Aún no tienes cuenta?{" "}
+        <Link to="/registro" className="underline underline-offset-4">
+          Crear cuenta
+        </Link>
+      </p>
     </div>
   );
 }
