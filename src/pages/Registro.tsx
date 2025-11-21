@@ -45,11 +45,11 @@ export default function Registro() {
       setLoading(true);
 
       // Llamada al backend -> POST /auth/registro
-      const data = await apiPost<AuthResponse>("/auth/registro", {
-        nombre,
-        email,
-        password,
-      });
+      const data = await apiPost<AuthResponse>("/auth/register", {
+      nombre,
+      email,
+      password,
+    });
 
       // Guardamos token y usuario en el contexto
       localStorage.setItem("token", data.token);
