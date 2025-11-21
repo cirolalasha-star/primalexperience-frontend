@@ -5,11 +5,12 @@ import { useAuth } from "../context/AuthContext";
 const gold = "#B8860B";
 
 export default function MiCuenta() {
-  const { user, loadingUser } = useAuth();
+  // ⬅️ ahora sacamos `loading` en vez de `loadingUser`
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
 
   // Mientras estamos comprobando /auth/me
-  if (loadingUser) {
+  if (loading) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-10 text-white">
         <p>Cargando tus datos...</p>
