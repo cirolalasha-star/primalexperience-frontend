@@ -1,32 +1,40 @@
 // src/context/AuthContext.tsx
-import { createContext, useState, useEffect, useContext } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import { apiGet } from "../api/client";
 
-// -------------------------
-// Tipos fuertes (TypeScript)
-// -------------------------
-export interface User {
+export type User = {
   id: number;
   nombre: string;
   email: string;
-  rol: string;
-}
+  rol: string; // "usuario" | "admin" | "guia" ...
+};
 
-export interface AuthContextType {
+// 👇 Añadimos loadingUser además de loading
+type AuthContextType = {
   user: User | null;
-  loading: boolean;
-  login: (usuario: User) => void;
+  loading: boolean;                    // para los layouts que usan `loading`
+  loadingUser: boolean;                // para páginas que usan `loadingUser`
+  login: (user: User, token?: string) => void;
   logout: () => void;
-}
+};
 
-// 🟦 Contexto tipado correctamente
-export const AuthContext = createContext<AuthContextType | null>(null);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+type Props = {
+  children: ReactNode;
+};
+
+export function AuthProvider({ children }: Props) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // estado interno de carga
 
-  // 🟡 Recuperar sesión al cargar la app
+  // Al montar la app intentamos recuperar al usuario actual
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -35,12 +43,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     apiGet<{ usuario: User }>("/auth/me")
-      .then((data) => setUser(data.usuario))
-      .catch(() => setUser(null))
+      .then((res) => {
+        setUser(res.usuario);
+      })
+      .catch(() => {
+        // Si el token peta, lo limpiamos
+        setUser(null);
+        localStorage.removeItem("token");
+      })
       .finally(() => setLoading(false));
   }, []);
 
-  const login = (usuario: User) => setUser(usuario);
+  const login = (usuario: User, token?: string) => {
+    if (token) {
+      localStorage.setItem("token", token);
+    }
+    setUser(usuario);
+  };
 
   const logout = () => {
     localStorage.removeItem("token");
@@ -48,17 +67,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,           // se puede usar como `loading`
+        loadingUser: loading, // o como `loadingUser` en otros componentes
+        login,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
-// Hook que ya no puede devolver null
 export function useAuth(): AuthContextType {
   const ctx = useContext(AuthContext);
   if (!ctx) {
-    throw new Error("useAuth debe usarse dentro de <AuthProvider>")
+    throw new Error("useAuth debe usarse dentro de <AuthProvider>");
   }
   return ctx;
 }
