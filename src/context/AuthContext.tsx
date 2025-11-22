@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { apiGet } from "../api/client";
+import { apiGet, apiPost } from "../api/client";
 
 export type User = {
   id: number;
@@ -62,9 +62,18 @@ export function AuthProvider({ children }: Props) {
   };
 
   const logout = () => {
-    localStorage.removeItem("token");
-    setUser(null);
-  };
+  // 1) Llamamos al backend para que limpie la cookie (si existe)
+  //    No esperamos la respuesta porque no es crítico para el flujo.
+  apiPost<{ message: string }>("/auth/logout", {})
+    .catch((err) => {
+      console.error("Error al hacer logout en backend:", err);
+    });
+
+  // 2) Limpiamos el token del frontend y el usuario en memoria
+  localStorage.removeItem("token");
+  setUser(null);
+};
+
 
   return (
     <AuthContext.Provider

@@ -1,12 +1,13 @@
 // src/components/Navbar.tsx
+
 /**
- * ·Navegación limpia en desktop
- * ·Menú móvil que solo tapa la pantalla cuando está abierto
- * ·En función de user.rol aparecen "Panel guía" y "Admin"
- * ·Login/Registro si no hay usuarios, "Cerrar sesión" si lo hay
+ * · Navegación limpia en desktop
+ * · Menú móvil que solo tapa la pantalla cuando está abierto
+ * · En función de user.rol aparecen "Panel guía" y "Admin"
+ * · Login/Registro si no hay usuario, "Cerrar sesión" si lo hay
  */
+
 import { useState } from "react";
-// Link no se usa → lo quitamos
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -14,31 +15,44 @@ const gold = "#B8860B";
 const dark = "#020202";
 
 export default function Navbar() {
+  // Estado del menú móvil (abierto/cerrado)
   const [open, setOpen] = useState(false);
+
   const navigate = useNavigate();
+
+  // user = usuario actual, logout = función del contexto que limpia token + usuario
   const { user, logout } = useAuth();
 
+  /**
+   * Cerrar sesión:
+   * · llama a logout() del contexto (que borra token + user)
+   * · cierra el menú móvil
+   * · navega a la home ("/")
+   */
   const handleLogout = () => {
     logout();
-    localStorage.removeItem("token");
     setOpen(false);
     navigate("/");
   };
 
+  /** Cierra el menú móvil (para usar en varios sitios) */
   const closeMenu = () => setOpen(false);
 
+  /** Estilo base de los links del navbar */
   const linkBase =
     "text-sm font-medium tracking-wide transition-colors hover:text-white";
 
+  /**
+   * Links principales (Experiencias, Destinos, Cómo funciona)
+   * extraClasses permite adaptar el layout entre desktop y mobile
+   */
   const renderMainLinks = (extraClasses = "") => (
     <div className={`flex gap-6 items-center ${extraClasses}`}>
       <NavLink
         to="/experiencias"
         onClick={closeMenu}
         className={({ isActive }) =>
-          `${linkBase} ${
-            isActive ? "text-white" : "text-gray-300"
-          }`
+          `${linkBase} ${isActive ? "text-white" : "text-gray-300"}`
         }
       >
         Experiencias
@@ -47,9 +61,7 @@ export default function Navbar() {
         to="/destinos"
         onClick={closeMenu}
         className={({ isActive }) =>
-          `${linkBase} ${
-            isActive ? "text-white" : "text-gray-300"
-          }`
+          `${linkBase} ${isActive ? "text-white" : "text-gray-300"}`
         }
       >
         Destinos
@@ -58,9 +70,7 @@ export default function Navbar() {
         to="/como-funciona"
         onClick={closeMenu}
         className={({ isActive }) =>
-          `${linkBase} ${
-            isActive ? "text-white" : "text-gray-300"
-          }`
+          `${linkBase} ${isActive ? "text-white" : "text-gray-300"}`
         }
       >
         Cómo funciona
@@ -68,6 +78,11 @@ export default function Navbar() {
     </div>
   );
 
+  /**
+   * Links visibles para cualquier usuario logueado:
+   * · Mis reservas
+   * · Mi cuenta
+   */
   const renderUserLinks = (extraClasses = "") => {
     if (!user) return null;
 
@@ -77,9 +92,7 @@ export default function Navbar() {
           to="/mis-reservas"
           onClick={closeMenu}
           className={({ isActive }) =>
-            `${linkBase} ${
-              isActive ? "text-white" : "text-gray-300"
-            }`
+            `${linkBase} ${isActive ? "text-white" : "text-gray-300"}`
           }
         >
           Mis reservas
@@ -88,9 +101,7 @@ export default function Navbar() {
           to="/mi-cuenta"
           onClick={closeMenu}
           className={({ isActive }) =>
-            `${linkBase} ${
-              isActive ? "text-white" : "text-gray-300"
-            }`
+            `${linkBase} ${isActive ? "text-white" : "text-gray-300"}`
           }
         >
           Mi cuenta
@@ -99,6 +110,11 @@ export default function Navbar() {
     );
   };
 
+  /**
+   * Links según el rol:
+   * · "Panel guía" si user.rol === "guia"
+   * · "Admin" si user.rol === "admin"
+   */
   const renderRoleLinks = (extraClasses = "") => {
     if (!user) return null;
 
@@ -109,22 +125,19 @@ export default function Navbar() {
             to="/guia/panel"
             onClick={closeMenu}
             className={({ isActive }) =>
-              `${linkBase} ${
-                isActive ? "text-white" : "text-gray-300"
-              }`
+              `${linkBase} ${isActive ? "text-white" : "text-gray-300"}`
             }
           >
             Panel guía
           </NavLink>
         )}
+
         {user.rol === "admin" && (
           <NavLink
             to="/admin/dashboard"
             onClick={closeMenu}
             className={({ isActive }) =>
-              `${linkBase} ${
-                isActive ? "text-white" : "text-gray-300"
-              }`
+              `${linkBase} ${isActive ? "text-white" : "text-gray-300"}`
             }
           >
             Admin
@@ -139,8 +152,9 @@ export default function Navbar() {
       className="sticky top-0 z-40 bg-black/90 backdrop-blur border-b"
       style={{ borderColor: gold }}
     >
+      {/* CONTENEDOR PRINCIPAL */}
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        {/* LOGO */}
+        {/* LOGO (botón que lleva a la home) */}
         <button
           onClick={() => {
             navigate("/");
@@ -148,8 +162,10 @@ export default function Navbar() {
           }}
           className="flex items-center gap-2 text-left"
         >
-          <div className="w-9 h-9 rounded-full border flex items-center justify-center text-xs font-bold"
-               style={{ borderColor: gold }}>
+          <div
+            className="w-9 h-9 rounded-full border flex items-center justify-center text-xs font-bold"
+            style={{ borderColor: gold }}
+          >
             PE
           </div>
           <div className="leading-tight">
@@ -162,13 +178,15 @@ export default function Navbar() {
           </div>
         </button>
 
-        {/* MENU DESKTOP */}
+        {/* MENU DESKTOP (≥ md) */}
         <div className="hidden md:flex items-center gap-8">
           {renderMainLinks()}
           {renderUserLinks()}
           {renderRoleLinks()}
 
+          {/* Parte derecha: login/registro o cerrar sesión */}
           {!user ? (
+            // Usuario NO logueado
             <div className="flex items-center gap-4">
               <button
                 className="text-sm font-medium text-gray-200 hover:text-white"
@@ -185,6 +203,7 @@ export default function Navbar() {
               </button>
             </div>
           ) : (
+            // Usuario logueado
             <button
               className="text-sm font-medium text-gray-300 hover:text-white"
               onClick={handleLogout}
@@ -194,7 +213,7 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* BOTÓN MENU MOBILE */}
+        {/* BOTÓN MENÚ MOBILE (hamburguesa) */}
         <button
           className="md:hidden inline-flex items-center justify-center w-9 h-9 border rounded-full border-gray-600"
           onClick={() => setOpen((v) => !v)}
@@ -206,14 +225,17 @@ export default function Navbar() {
         </button>
       </div>
 
-      {/* MENU MOBILE */}
+      {/* MENU MOBILE (solo se muestra cuando open === true) */}
       {open && (
         <div className="md:hidden border-t border-[#222] bg-black/95">
           <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col gap-4">
+            {/* Links principales en columna */}
             {renderMainLinks("flex-col items-start gap-3")}
+            {/* Links de usuario y de rol en columna */}
             {renderUserLinks("flex-col items-start gap-2")}
             {renderRoleLinks("flex-col items-start gap-2")}
 
+            {/* Parte inferior: login/registro o cerrar sesión */}
             {!user ? (
               <div className="flex flex-col gap-3 pt-2">
                 <button
