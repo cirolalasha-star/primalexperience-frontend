@@ -21,6 +21,7 @@ import MisReservas from "../pages/MisReservas";
 // (cuando tengas la página, la activas)
 // import Favoritos from "../pages/Favoritos";
 
+
 // 🛠 Área admin
 import DashboardAdmin from "../pages/admin/DashboardAdmin";
 // (cuando tengas estas páginas, las importas y añades rutas)
