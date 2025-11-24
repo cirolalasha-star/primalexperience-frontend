@@ -1,256 +1,447 @@
-// src/pages/MisReservas.tsx
-
-/**
- * Página "Mis reservas"
- * ----------------------
- * - Solo accesible para usuarios logueados (usa useAuth).
- * - Llama al backend para obtener las reservas del usuario actual.
- * - Normaliza la respuesta real de la API al formato que usa la UI.
- */
-
+// src/pages/ExperienciaDetalle.tsx
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-
-import { apiGet } from "../api/client";
+import { useNavigate, useParams } from "react-router-dom";
+import { apiGet, apiPost } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
 const gold = "#B8860B";
 
-/**
- * Tipo que refleja **lo que devuelve el backend** en
- * GET /api/reservas/mias  (aprox, con campos opcionales).
- */
-type ReservaApi = {
+interface SalidaProgramada {
   id: number;
-  fecha: string; // fecha de creación de la reserva
-  numero_personas: number;
-  estado: string;
-  salidas_programadas?: {
-    fecha_salida?: string;
-    precio_por_persona?: number;
-    tours?: {
-      id: number;
-      titulo?: string;
-      slug?: string;
-    };
-  };
-};
+  fecha: string; // ISO
+  plazas_disponibles: number;
+  plazas_totales: number;
+}
 
-/**
- * Tipo que usa la **UI** ya normalizado.
- */
-type Reserva = {
+interface Resena {
   id: number;
-  tourTitulo: string;
-  fecha: string | null;       // ISO string o null
-  nPersonas: number;
-  estado: string;             // "pendiente" | "confirmada" | ...
-  precioTotal: number | null; // en euros (puede ser null si no tenemos dato)
-};
+  usuario_nombre: string;
+  comentario: string;
+  puntuacion: number;
+  creado_en: string;
+}
 
-export default function MisReservas() {
-  const { user, loading } = useAuth();
+interface TourDetalle {
+  id: number;
+  titulo: string;
+  descripcion: string | null;
+  ubicacion: string | null;
+  latitud: number | string | null;
+  longitud: number | string | null;
+  duracion_dias: number | null;
+  precio_base: number | string | null;
+  dificultad: string | null;
+  cupo_maximo: number | null;
+  imagen_url: string | null;
+  salidas_programadas?: SalidaProgramada[];
+  resenas?: Resena[];
+}
+
+export default function ExperienciaDetalle() {
+  const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
-  const [reservas, setReservas] = useState<Reserva[]>([]);
-  const [loadingReservas, setLoadingReservas] = useState(true);
+  const [tour, setTour] = useState<TourDetalle | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 1️⃣ Si aún estamos comprobando /auth/me → pantalla de carga genérica
-  if (loading) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-10 text-white">
-        <p>Cargando tu sesión...</p>
-      </div>
-    );
-  }
+  // 🔽 Estados para reserva
+  const [salidaSeleccionada, setSalidaSeleccionada] = useState<number | null>(
+    null
+  );
+  const [numeroPersonas, setNumeroPersonas] = useState<number>(1);
+  const [notas, setNotas] = useState("");
+  const [reservaLoading, setReservaLoading] = useState(false);
+  const [reservaError, setReservaError] = useState<string | null>(null);
 
-  // 2️⃣ Si no hay usuario → forzamos ir a login
-  if (!user) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-10 text-white">
-        <h1 className="text-2xl font-bold mb-4">Debes iniciar sesión</h1>
-        <p className="mb-4">
-          Inicia sesión para ver tus reservas y gestionar tus experiencias.
-        </p>
-        <button
-          onClick={() => navigate("/login?redirect=/mis-reservas")}
-          className="px-4 py-2 rounded-full text-sm font-semibold"
-          style={{ backgroundColor: gold }}
-        >
-          Ir a iniciar sesión
-        </button>
-      </div>
-    );
-  }
-
-  // 3️⃣ Cargar reservas del usuario logueado
   useEffect(() => {
-    let cancelled = false;
+    if (!id) return;
 
-    async function cargarReservas() {
+    async function fetchTour() {
       try {
+        setLoading(true);
         setError(null);
-        setLoadingReservas(true);
 
-        /**
-         * GET /api/reservas/mias
-         * apiGet ya añade:
-         *   - BASE_URL (VITE_API_URL)
-         *   - Authorization: Bearer <token> si existe en localStorage
-         */
-        const data = await apiGet<ReservaApi[]>("/reservas/mias");
-
-        if (cancelled) return;
-
-        // 🔄 Normalizamos la respuesta de la API al tipo Reserva de la UI
-        const normalizadas: Reserva[] = data.map((r) => {
-          const salida = r.salidas_programadas;
-          const tour = salida?.tours;
-
-          // fecha: preferimos la fecha de salida, si no la de creación
-          const fecha =
-            salida?.fecha_salida ??
-            r.fecha ??
-            null;
-
-          // calculamos precioTotal si tenemos precio_por_persona
-          let precioTotal: number | null = null;
-          if (typeof salida?.precio_por_persona === "number") {
-            precioTotal = salida.precio_por_persona * r.numero_personas;
-          }
-
-          return {
-            id: r.id,
-            tourTitulo: tour?.titulo ?? "Experiencia sin título",
-            fecha,
-            nPersonas: r.numero_personas,
-            estado: r.estado,
-            precioTotal,
-          };
-        });
-
-        setReservas(normalizadas);
+        const data = await apiGet<TourDetalle>(`"/tours/${id}"`.replace('""', ""));
+        setTour(data);
       } catch (err) {
-        console.error("Error cargando reservas:", err);
-        if (!cancelled) {
-          setError(
-            "No se han podido cargar tus reservas. Inténtalo más tarde."
-          );
-        }
+        console.error(err);
+        setError("No se ha podido cargar esta experiencia.");
       } finally {
-        if (!cancelled) {
-          setLoadingReservas(false);
-        }
+        setLoading(false);
       }
     }
 
-    cargarReservas();
+    fetchTour();
+  }, [id]);
 
-    // Cleanup por si se desmonta el componente en mitad de la petición
-    return () => {
-      cancelled = true;
-    };
-  }, []); // 👈 se ejecuta solo al montar la página
+  // 🟡 Enviar solicitud de reserva
+  const handleReservaClick = async () => {
+    if (!tour) return;
+
+    // Si no hay sesión, redirigimos a login con redirect
+    if (!user) {
+      navigate(`/login?redirect=/experiencias/${tour.id}`);
+      return;
+    }
+
+    // Validaciones básicas
+    if (!salidaSeleccionada) {
+      setReservaError("Selecciona una fecha antes de reservar.");
+      return;
+    }
+
+    if (numeroPersonas <= 0) {
+      setReservaError("Introduce un número de personas válido.");
+      return;
+    }
+
+    try {
+      setReservaLoading(true);
+      setReservaError(null);
+
+      // 🔥 Llamada real al backend → POST /api/reservas
+      await apiPost("/reservas", {
+        tour_id: tour.id,
+        salida_programada_id: salidaSeleccionada,
+        numero_personas: numeroPersonas,
+        notas: notas.trim() || undefined,
+      });
+
+      // Si todo OK → ir a Mis reservas
+      navigate("/mis-reservas");
+    } catch (err) {
+      console.error("Error al crear la reserva:", err);
+      setReservaError(
+        err instanceof Error
+          ? err.message
+          : "No se ha podido crear la reserva. Inténtalo de nuevo."
+      );
+    } finally {
+      setReservaLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-10 text-sm text-gray-300">
+        Cargando experiencia...
+      </div>
+    );
+  }
+
+  if (error || !tour) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-10 text-sm text-red-400">
+        {error || "No se ha encontrado esta experiencia."}
+      </div>
+    );
+  }
+
+  const precio =
+    tour.precio_base !== null && tour.precio_base !== undefined
+      ? Number(tour.precio_base)
+      : null;
+
+  const lat =
+    tour.latitud !== null && tour.latitud !== undefined
+      ? Number(tour.latitud)
+      : null;
+
+  const lng =
+    tour.longitud !== null && tour.longitud !== undefined
+      ? Number(tour.longitud)
+      : null;
+
+  const salidas = tour.salidas_programadas ?? [];
+  const resenas = tour.resenas ?? [];
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-10 text-white">
-      <h1 className="text-3xl font-bold mb-2">Mis reservas</h1>
-      <p className="text-sm text-gray-300 mb-6">
-        Aquí verás tus próximas experiencias, el estado de cada reserva y el
-        número de personas.
-      </p>
+    <div className="max-w-6xl mx-auto px-4 py-8 text-white">
+      {/* HEADER */}
+      <section className="mb-6">
+        <button
+          className="text-xs text-gray-300 mb-3 underline underline-offset-4"
+          onClick={() => navigate(-1)}
+        >
+          ← Volver
+        </button>
 
-      {/* Estado de carga de las reservas */}
-      {loadingReservas && (
-        <p className="text-sm text-gray-300">Cargando tus reservas...</p>
-      )}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-gray-400 mb-1">
+              Experiencia · {tour.ubicacion || "Ubicación por confirmar"}
+            </p>
+            <h1 className="text-2xl md:text-3xl font-bold mb-1">
+              {tour.titulo}
+            </h1>
+            <div className="flex flex-wrap gap-2 text-[11px] text-gray-200">
+              {tour.dificultad && (
+                <span className="px-2 py-1 rounded-full bg-[#111] border border-[#333]">
+                  Dificultad: {tour.dificultad}
+                </span>
+              )}
+              {tour.duracion_dias && (
+                <span className="px-2 py-1 rounded-full bg-[#111] border border-[#333]">
+                  {tour.duracion_dias} día
+                  {tour.duracion_dias > 1 ? "s" : ""}
+                </span>
+              )}
+              {tour.cupo_maximo && (
+                <span className="px-2 py-1 rounded-full bg-[#111] border border-[#333]">
+                  Grupo máx. {tour.cupo_maximo} personas
+                </span>
+              )}
+            </div>
+          </div>
 
-      {/* Error al cargar reservas */}
-      {error && !loadingReservas && (
-        <p className="text-sm text-red-400 mb-4">{error}</p>
-      )}
-
-      {/* Lista vacía */}
-      {!loadingReservas && !error && reservas.length === 0 && (
-        <div className="border border-[#222] rounded-2xl p-6 bg-[#050505]">
-          <p className="text-sm mb-2">Todavía no tienes ninguna reserva.</p>
-          <button
-            onClick={() => navigate("/experiencias")}
-            className="mt-2 px-4 py-2 rounded-full text-sm font-semibold"
-            style={{ backgroundColor: gold }}
-          >
-            Explorar experiencias
-          </button>
-        </div>
-      )}
-
-      {/* Lista de reservas */}
-      {!loadingReservas && !error && reservas.length > 0 && (
-        <div className="space-y-4">
-          {reservas.map((reserva) => (
-            <div
-              key={reserva.id}
-              className="border border-[#222] rounded-2xl p-4 bg-[#050505] flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+          <div className="text-right">
+            {precio !== null && (
+              <p className="text-sm text-gray-300">
+                Desde{" "}
+                <span className="text-xl font-semibold" style={{ color: gold }}>
+                  {precio.toFixed(0)} €
+                </span>{" "}
+                por persona
+              </p>
+            )}
+            <button
+              onClick={handleReservaClick}
+              disabled={reservaLoading}
+              className="mt-2 px-6 py-2 rounded-full text-sm font-semibold shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{ backgroundColor: gold, color: "#000" }}
             >
+              {reservaLoading ? "Enviando solicitud..." : "Solicitar reserva"}
+            </button>
+            <p className="text-[11px] text-gray-400 mt-1">
+              No se realiza ningún pago online. Confirmamos por contacto
+              directo.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* GALERÍA + MAPA */}
+      <section className="grid gap-4 md:grid-cols-3 mb-8">
+        <div className="md:col-span-2 rounded-2xl overflow-hidden bg-[#111] border border-[#222] h-64 md:h-80">
+          {tour.imagen_url ? (
+            <img
+              src={tour.imagen_url}
+              alt={tour.titulo}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-xs text-gray-500">
+              Foto principal pendiente
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl bg-[#050505] border border-[#222] p-4 text-sm">
+          <h2 className="text-base font-semibold mb-2">Mapa aproximado</h2>
+          {lat !== null && lng !== null ? (
+            <div className="w-full h-40 rounded-lg overflow-hidden bg-[#111] flex items-center justify-center text-xs text-gray-300">
+              <p>
+                Coordenadas: {lat.toFixed(4)}, {lng.toFixed(4)}
+              </p>
+            </div>
+          ) : (
+            <div className="w-full h-40 rounded-lg bg-[#111] flex items-center justify-center text-xs text-gray-500">
+              Coordenadas pendientes
+            </div>
+          )}
+          <p className="text-[11px] text-gray-400 mt-2">
+            Mostramos una zona aproximada para proteger la tranquilidad de la
+            fauna y evitar masificación.
+          </p>
+        </div>
+      </section>
+
+      {/* DESCRIPCIÓN + INFO RÁPIDA */}
+      <section className="grid gap-8 md:grid-cols-3 mb-10">
+        <div className="md:col-span-2">
+          <h2 className="text-lg font-semibold mb-2">Descripción</h2>
+          <p className="text-sm text-gray-200 whitespace-pre-line">
+            {tour.descripcion || "Descripción pendiente de completar."}
+          </p>
+        </div>
+
+        <div className="bg-[#050505] border border-[#222] rounded-2xl p-4 text-sm">
+          <h3 className="text-base font-semibold mb-2">
+            Información esencial
+          </h3>
+          <ul className="space-y-1 text-gray-200 text-sm">
+            {tour.duracion_dias && (
+              <li>• Duración: {tour.duracion_dias} día(s)</li>
+            )}
+            {tour.dificultad && <li>• Dificultad: {tour.dificultad}</li>}
+            {tour.cupo_maximo && (
+              <li>• Grupo máximo: {tour.cupo_maximo} personas</li>
+            )}
+            {tour.ubicacion && <li>• Zona principal: {tour.ubicacion}</li>}
+            <li>• Idioma: Español (otros idiomas próximamente)</li>
+          </ul>
+        </div>
+      </section>
+
+      {/* CALENDARIO / SALIDAS PROGRAMADAS */}
+      <section id="calendario" className="mb-10">
+        <h2 className="text-lg font-semibold mb-3">
+          Fechas disponibles y plazas
+        </h2>
+
+        {salidas.length === 0 ? (
+          <p className="text-sm text-gray-300">
+            Aún no hay salidas programadas visibles. Si te interesa esta
+            experiencia, contáctanos y te avisamos de las próximas fechas.
+          </p>
+        ) : (
+          <>
+            <div className="space-y-3">
+              {salidas.map((s) => {
+                const fecha = new Date(s.fecha);
+                const plazasLibres = s.plazas_disponibles;
+
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSalidaSeleccionada(s.id)}
+                    className={`w-full flex items-center justify-between text-left px-3 py-2 rounded-lg border text-sm ${
+                      salidaSeleccionada === s.id
+                        ? "border-[#B8860B] bg-[#1a1305]"
+                        : "border-[#333] bg-[#050505]"
+                    }`}
+                  >
+                    <div>
+                      <p className="font-medium">
+                        {fecha.toLocaleDateString("es-ES", {
+                          weekday: "short",
+                          day: "2-digit",
+                          month: "short",
+                        })}{" "}
+                        ·{" "}
+                        {fecha.toLocaleTimeString("es-ES", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                      <p className="text-xs text-gray-300">
+                        Salida programada con guía experto
+                      </p>
+                    </div>
+                    <div className="text-right text-xs">
+                      <p>
+                        Plazas libres:{" "}
+                        <span className="font-semibold">{plazasLibres}</span>
+                      </p>
+                      {tour.cupo_maximo && (
+                        <p className="text-[11px] text-gray-400">
+                          Cupo máx. {tour.cupo_maximo}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Formulario mini: nº personas + notas */}
+            <div className="mt-4 grid md:grid-cols-2 gap-4 text-sm text-gray-200">
               <div>
-                <p className="text-xs uppercase text-gray-400 mb-1">
-                  Experiencia
-                </p>
-                <p className="text-lg font-semibold">{reserva.tourTitulo}</p>
-
-                <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-300">
-                  <div>
-                    <span className="block text-[11px] uppercase text-gray-500">
-                      Fecha
-                    </span>
-                    <span>
-                      {reserva.fecha
-                        ? new Date(reserva.fecha).toLocaleDateString()
-                        : "-"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-[11px] uppercase text-gray-500">
-                      Personas
-                    </span>
-                    <span>{reserva.nPersonas}</span>
-                  </div>
-                  <div>
-                    <span className="block text-[11px] uppercase text-gray-500">
-                      Estado
-                    </span>
-                    <span className="capitalize">{reserva.estado}</span>
-                  </div>
-                  <div>
-                    <span className="block text-[11px] uppercase text-gray-500">
-                      Importe
-                    </span>
-                    <span>
-                      {reserva.precioTotal != null
-                        ? `${reserva.precioTotal.toFixed(2)} €`
-                        : "—"}
-                    </span>
-                  </div>
-                </div>
+                <label className="block text-[11px] uppercase text-gray-400 mb-1">
+                  Número de personas
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  className="w-full rounded-lg px-3 py-2 bg-black/70 border border-gray-600 text-sm focus:outline-none focus:border-gray-300"
+                  value={numeroPersonas}
+                  onChange={(e) => setNumeroPersonas(Number(e.target.value))}
+                />
               </div>
-
-              {/* Botón para ir a detalle (cuando lo tengas) */}
-              <div className="md:text-right">
-                <button
-                  className="px-4 py-2 rounded-full text-sm font-semibold"
-                  style={{ backgroundColor: gold }}
-                  // TODO: cuando tengas ruta tipo /experiencias/:id o :slug
-                  // onClick={() => navigate(`/experiencias/${tourId}`)}
-                  onClick={() => navigate("/experiencias")}
-                >
-                  Ver experiencia
-                </button>
+              <div>
+                <label className="block text-[11px] uppercase text-gray-400 mb-1">
+                  Notas opcionales (alergias, nivel, dudas…)
+                </label>
+                <textarea
+                  rows={3}
+                  className="w-full rounded-lg px-3 py-2 bg-black/70 border border-gray-600 text-sm focus:outline-none focus:border-gray-300 resize-none"
+                  value={notas}
+                  onChange={(e) => setNotas(e.target.value)}
+                />
               </div>
             </div>
-          ))}
-        </div>
-      )}
+
+            {salidaSeleccionada && (
+              <div className="mt-3 text-xs text-gray-300">
+                Has seleccionado una fecha. Al solicitar la reserva confirmaremos tu
+                plaza por email o WhatsApp.
+              </div>
+            )}
+
+            {reservaError && (
+              <p className="mt-3 text-sm text-red-400">{reservaError}</p>
+            )}
+          </>
+        )}
+      </section>
+
+      {/* IMPACTO POSITIVO */}
+      <section className="mb-10">
+        <h2 className="text-lg font-semibold mb-2">
+          Impacto positivo de esta experiencia
+        </h2>
+        <p className="text-sm text-gray-200 mb-2">
+          Parte de los beneficios de esta salida se destinan a proyectos de
+          conservación en la zona donde se realiza la actividad.
+        </p>
+        <ul className="text-sm text-gray-200 space-y-1">
+          <li>• Apoyo a proyectos de seguimiento de fauna y hábitats.</li>
+          <li>• Colaboración con guías locales y economía de la zona.</li>
+          <li>• Grupos reducidos para minimizar el impacto sobre el entorno.</li>
+        </ul>
+      </section>
+
+      {/* RESEÑAS */}
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold mb-3">Reseñas de viajeros</h2>
+
+        {resenas.length === 0 ? (
+          <p className="text-sm text-gray-300">
+            Todavía no hay reseñas para esta experiencia. ¡Puedes ser de los
+            primeros en vivirla!
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {resenas.map((r) => (
+              <article
+                key={r.id}
+                className="bg-[#050505] border border-[#222] rounded-2xl p-3 text-sm"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <p className="font-semibold text-sm">
+                    {r.usuario_nombre || "Viajero"}
+                  </p>
+                  <p className="text-xs text-yellow-400">
+                    {"★".repeat(r.puntuacion)}{" "}
+                    <span className="text-gray-400">
+                      ({r.puntuacion.toFixed(1)})
+                    </span>
+                  </p>
+                </div>
+                <p className="text-xs text-gray-300 mb-1 whitespace-pre-line">
+                  {r.comentario}
+                </p>
+                <p className="text-[10px] text-gray-500">
+                  {new Date(r.creado_en).toLocaleDateString("es-ES")}
+                </p>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
