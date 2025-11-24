@@ -40,30 +40,31 @@ export default function MisReservas() {
         const apiReservas = await apiGet<any[]>("/reservas/mias");
 
         // Adaptamos la respuesta de la API a nuestro tipo Reserva
-        const parsed: Reserva[] = apiReservas.map((r) => {
-          const tour = r.tour || r.tours || null;
-          const salida = r.salida_programada || r.salida || null;
+        // Adaptamos la respuesta de la API a nuestro tipo Reserva
+const parsed: Reserva[] = apiReservas.map((r) => {
+  // En tu JSON: r.salidas_programadas.tours
+  const salida = r.salidas_programadas || null;
+  const tour = salida?.tours || null;
 
-          return {
-            id: r.id,
-            estado: r.estado ?? "pendiente",
-            numero_personas: r.numero_personas ?? r.num_personas ?? 1,
-            fecha_reserva:
-              r.fecha_reserva || r.creado_en || r.createdAt || null,
-            fecha_salida:
-              r.fecha_salida ||
-              (salida && (salida.fecha_inicio || salida.fecha)) ||
-              null,
-            tour: tour
-              ? {
-                  id: tour.id,
-                  titulo: tour.titulo ?? "Experiencia",
-                  ubicacion: tour.ubicacion ?? null,
-                  imagen_url: tour.imagen_url ?? null,
-                }
-              : null,
-          };
-        });
+  return {
+    id: r.id,
+    estado: r.estado ?? "pendiente",
+    numero_personas: r.numero_personas ?? 1,
+    // en el JSON, la fecha de creación viene como r.fecha
+    fecha_reserva: r.fecha || null,
+    // fecha de salida: salidas_programadas.fecha_inicio
+    fecha_salida: salida?.fecha_inicio || null,
+    tour: tour
+      ? {
+          id: tour.id,
+          titulo: tour.titulo ?? "Experiencia",
+          ubicacion: tour.ubicacion ?? null,
+          imagen_url: tour.imagen_url ?? null,
+        }
+      : null,
+  };
+});
+
 
         setReservas(parsed);
       } catch (err) {

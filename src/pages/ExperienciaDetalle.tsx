@@ -8,11 +8,10 @@ const gold = "#B8860B";
 
 interface SalidaProgramada {
   id: number;
-  fecha_inicio: string; // ISO que viene del backend
-  plazas_disponibles: number;
-  plazas_totales: number;
+  fecha_inicio: string;      // ISO (viene de salidas_programadas.fecha_inicio)
+  plazas_totales: number;    // salidas_programadas.plazas_totales
+  plazas_ocupadas: number;   // salidas_programadas.plazas_ocupadas
 }
-
 
 interface Resena {
   id: number;
@@ -47,7 +46,7 @@ export default function ExperienciaDetalle() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 🔽 Estados para reserva
+  // Estado reserva
   const [salidaSeleccionada, setSalidaSeleccionada] = useState<number | null>(
     null
   );
@@ -57,38 +56,35 @@ export default function ExperienciaDetalle() {
   const [reservaError, setReservaError] = useState<string | null>(null);
 
   useEffect(() => {
-  if (!id) return;
+    if (!id) return;
 
-  async function fetchTour() {
-    try {
-      setLoading(true);
-      setError(null);
+    async function fetchTour() {
+      try {
+        setLoading(true);
+        setError(null);
 
-      const data = await apiGet<TourDetalle>(`/tours/${id}`);
-      setTour(data);
-    } catch (err) {
-      console.error(err);
-      setError("No se ha podido cargar esta experiencia.");
-    } finally {
-      setLoading(false);
+        const data = await apiGet<TourDetalle>(`/tours/${id}`);
+        setTour(data);
+      } catch (err) {
+        console.error(err);
+        setError("No se ha podido cargar esta experiencia.");
+      } finally {
+        setLoading(false);
+      }
     }
-  }
 
-  fetchTour();
-}, [id]);
+    fetchTour();
+  }, [id]);
 
-
-  // 🟡 Enviar solicitud de reserva
+  // Enviar solicitud de reserva
   const handleReservaClick = async () => {
     if (!tour) return;
 
-    // Si no hay sesión, redirigimos a login con redirect
     if (!user) {
       navigate(`/login?redirect=/experiencias/${tour.id}`);
       return;
     }
 
-    // Validaciones básicas
     if (!salidaSeleccionada) {
       setReservaError("Selecciona una fecha antes de reservar.");
       return;
@@ -99,11 +95,36 @@ export default function ExperienciaDetalle() {
       return;
     }
 
+    // Validar plazas libres también en el front
+    const salidas = tour.salidas_programadas ?? [];
+    const salida = salidas.find((s) => s.id === salidaSeleccionada);
+
+    if (!salida) {
+      setReservaError("No hemos podido encontrar esa salida.");
+      return;
+    }
+
+    const plazasLibres =
+      (salida.plazas_totales ?? 0) - (salida.plazas_ocupadas ?? 0);
+
+    if (plazasLibres <= 0) {
+      setReservaError(
+        "Esta salida ya no tiene plazas libres. Elige otra fecha."
+      );
+      return;
+    }
+
+    if (numeroPersonas > plazasLibres) {
+      setReservaError(
+        `Solo quedan ${plazasLibres} plazas libres para esa fecha.`
+      );
+      return;
+    }
+
     try {
       setReservaLoading(true);
       setReservaError(null);
 
-      // 🔥 Llamada real al backend → POST /api/reservas
       await apiPost("/reservas", {
         tour_id: tour.id,
         salida_programada_id: salidaSeleccionada,
@@ -111,7 +132,6 @@ export default function ExperienciaDetalle() {
         notas: notas.trim() || undefined,
       });
 
-      // Si todo OK → ir a Mis reservas
       navigate("/mis-reservas");
     } catch (err) {
       console.error("Error al crear la reserva:", err);
@@ -158,6 +178,20 @@ export default function ExperienciaDetalle() {
 
   const salidas = tour.salidas_programadas ?? [];
   const resenas = tour.resenas ?? [];
+
+  // Salida seleccionada y máximo permitido según plazas libres
+  const salidaSeleccionadaObj = salidas.find(
+    (s) => s.id === salidaSeleccionada
+  );
+
+  const maxPersonasSeleccionadas =
+    salidaSeleccionadaObj
+      ? Math.max(
+          1,
+          (salidaSeleccionadaObj.plazas_totales ?? 0) -
+            (salidaSeleccionadaObj.plazas_ocupadas ?? 0)
+        )
+      : undefined;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 text-white">
@@ -303,13 +337,24 @@ export default function ExperienciaDetalle() {
             <div className="space-y-3">
               {salidas.map((s) => {
                 const fecha = new Date(s.fecha_inicio);
-                const plazasLibres = s.plazas_disponibles;
+                const plazasLibres = Math.max(
+                  0,
+                  (s.plazas_totales ?? 0) - (s.plazas_ocupadas ?? 0)
+                );
 
                 return (
                   <button
                     key={s.id}
                     type="button"
-                    onClick={() => setSalidaSeleccionada(s.id)}
+                    onClick={() => {
+                      setSalidaSeleccionada(s.id);
+                      // ajustar nº personas al máximo disponible
+                      setNumeroPersonas((prev) => {
+                        if (plazasLibres <= 0) return 1;
+                        if (!prev || prev < 1) return 1;
+                        return prev > plazasLibres ? plazasLibres : prev;
+                      });
+                    }}
                     className={`w-full flex items-center justify-between text-left px-3 py-2 rounded-lg border text-sm ${
                       salidaSeleccionada === s.id
                         ? "border-[#B8860B] bg-[#1a1305]"
@@ -358,10 +403,28 @@ export default function ExperienciaDetalle() {
                 <input
                   type="number"
                   min={1}
+                  max={maxPersonasSeleccionadas ?? undefined}
                   className="w-full rounded-lg px-3 py-2 bg-black/70 border border-gray-600 text-sm focus:outline-none focus:border-gray-300"
                   value={numeroPersonas}
-                  onChange={(e) => setNumeroPersonas(Number(e.target.value))}
+                  onChange={(e) => {
+                    const value = Number(e.target.value);
+                    if (!maxPersonasSeleccionadas) {
+                      setNumeroPersonas(value);
+                      return;
+                    }
+                    const clamped = Math.max(
+                      1,
+                      Math.min(maxPersonasSeleccionadas, value)
+                    );
+                    setNumeroPersonas(clamped);
+                  }}
                 />
+                {maxPersonasSeleccionadas !== undefined && (
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    Plazas disponibles para esta salida:{" "}
+                    {maxPersonasSeleccionadas}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-[11px] uppercase text-gray-400 mb-1">
@@ -378,8 +441,8 @@ export default function ExperienciaDetalle() {
 
             {salidaSeleccionada && (
               <div className="mt-3 text-xs text-gray-300">
-                Has seleccionado una fecha. Al solicitar la reserva confirmaremos tu
-                plaza por email o WhatsApp.
+                Has seleccionado una fecha. Al solicitar la reserva confirmaremos
+                tu plaza por email o WhatsApp.
               </div>
             )}
 
