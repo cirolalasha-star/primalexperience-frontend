@@ -5,10 +5,7 @@
  * ----------------------
  * - Solo accesible para usuarios logueados (usa useAuth).
  * - Llama al backend para obtener las reservas del usuario actual.
- * - Muestra estados de carga, error y lista vacía.
- *
- * IMPORTANTE: ajusta el tipo Reserva y el endpoint "/reservas/mias"
- * para que coincidan con tu API real.
+ * - Normaliza la respuesta real de la API al formato que usa la UI.
  */
 
 import { useEffect, useState } from "react";
@@ -19,14 +16,36 @@ import { useAuth } from "../context/AuthContext";
 
 const gold = "#B8860B";
 
+/**
+ * Tipo que refleja **lo que devuelve el backend** en
+ * GET /api/reservas/mias  (aprox, con campos opcionales).
+ */
+type ReservaApi = {
+  id: number;
+  fecha: string; // fecha de creación de la reserva
+  numero_personas: number;
+  estado: string;
+  salidas_programadas?: {
+    fecha_salida?: string;
+    precio_por_persona?: number;
+    tours?: {
+      id: number;
+      titulo?: string;
+      slug?: string;
+    };
+  };
+};
+
+/**
+ * Tipo que usa la **UI** ya normalizado.
+ */
 type Reserva = {
-  // 👇 Ajusta estos campos a lo que devuelva tu backend
   id: number;
   tourTitulo: string;
-  fecha: string;          // ISO string o "2025-09-12"
+  fecha: string | null;       // ISO string o null
   nPersonas: number;
-  estado: string;         // "pendiente" | "confirmada" | "cancelada" ...
-  precioTotal: number;    // en euros
+  estado: string;             // "pendiente" | "confirmada" | ...
+  precioTotal: number | null; // en euros (puede ser null si no tenemos dato)
 };
 
 export default function MisReservas() {
@@ -75,24 +94,49 @@ export default function MisReservas() {
         setLoadingReservas(true);
 
         /**
-         * 🔥 Endpoint de ejemplo:
-         *    GET /api/reservas/mias
-         *
-         * apiGet ya añade automáticamente:
+         * GET /api/reservas/mias
+         * apiGet ya añade:
          *   - BASE_URL (VITE_API_URL)
          *   - Authorization: Bearer <token> si existe en localStorage
-         *
-         * Ajusta el tipo <Reserva[]> y la URL al formato real de tu backend.
          */
-        const data = await apiGet<Reserva[]>("/reservas/mias");
+        const data = await apiGet<ReservaApi[]>("/reservas/mias");
 
-        if (!cancelled) {
-          setReservas(data);
-        }
+        if (cancelled) return;
+
+        // 🔄 Normalizamos la respuesta de la API al tipo Reserva de la UI
+        const normalizadas: Reserva[] = data.map((r) => {
+          const salida = r.salidas_programadas;
+          const tour = salida?.tours;
+
+          // fecha: preferimos la fecha de salida, si no la de creación
+          const fecha =
+            salida?.fecha_salida ??
+            r.fecha ??
+            null;
+
+          // calculamos precioTotal si tenemos precio_por_persona
+          let precioTotal: number | null = null;
+          if (typeof salida?.precio_por_persona === "number") {
+            precioTotal = salida.precio_por_persona * r.numero_personas;
+          }
+
+          return {
+            id: r.id,
+            tourTitulo: tour?.titulo ?? "Experiencia sin título",
+            fecha,
+            nPersonas: r.numero_personas,
+            estado: r.estado,
+            precioTotal,
+          };
+        });
+
+        setReservas(normalizadas);
       } catch (err) {
         console.error("Error cargando reservas:", err);
         if (!cancelled) {
-          setError("No se han podido cargar tus reservas. Inténtalo más tarde.");
+          setError(
+            "No se han podido cargar tus reservas. Inténtalo más tarde."
+          );
         }
       } finally {
         if (!cancelled) {
@@ -160,7 +204,11 @@ export default function MisReservas() {
                     <span className="block text-[11px] uppercase text-gray-500">
                       Fecha
                     </span>
-                    <span>{new Date(reserva.fecha).toLocaleDateString()}</span>
+                    <span>
+                      {reserva.fecha
+                        ? new Date(reserva.fecha).toLocaleDateString()
+                        : "-"}
+                    </span>
                   </div>
                   <div>
                     <span className="block text-[11px] uppercase text-gray-500">
@@ -178,7 +226,11 @@ export default function MisReservas() {
                     <span className="block text-[11px] uppercase text-gray-500">
                       Importe
                     </span>
-                    <span>{reserva.precioTotal.toFixed(2)} €</span>
+                    <span>
+                      {reserva.precioTotal != null
+                        ? `${reserva.precioTotal.toFixed(2)} €`
+                        : "—"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -189,7 +241,7 @@ export default function MisReservas() {
                   className="px-4 py-2 rounded-full text-sm font-semibold"
                   style={{ backgroundColor: gold }}
                   // TODO: cuando tengas ruta tipo /experiencias/:id o :slug
-                  // onClick={() => navigate(`/experiencias/${reserva.id}`)}
+                  // onClick={() => navigate(`/experiencias/${tourId}`)}
                   onClick={() => navigate("/experiencias")}
                 >
                   Ver experiencia
