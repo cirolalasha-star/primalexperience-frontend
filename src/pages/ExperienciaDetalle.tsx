@@ -8,10 +8,11 @@ const gold = "#B8860B";
 
 interface SalidaProgramada {
   id: number;
-  fecha: string; // ISO
+  fecha_inicio: string; // ISO que viene del backend
   plazas_disponibles: number;
   plazas_totales: number;
 }
+
 
 interface Resena {
   id: number;
@@ -301,7 +302,7 @@ export default function ExperienciaDetalle() {
           <>
             <div className="space-y-3">
               {salidas.map((s) => {
-                const fecha = new Date(s.fecha);
+                const fecha = new Date(s.fecha_inicio);
                 const plazasLibres = s.plazas_disponibles;
 
                 return (

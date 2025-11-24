@@ -1,447 +1,243 @@
-// src/pages/ExperienciaDetalle.tsx
+// src/pages/MisReservas.tsx
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { apiGet, apiPost } from "../api/client";
+import { useNavigate } from "react-router-dom";
+import { apiGet } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
 const gold = "#B8860B";
 
-interface SalidaProgramada {
+interface Reserva {
   id: number;
-  fecha: string; // ISO
-  plazas_disponibles: number;
-  plazas_totales: number;
+  estado: string;
+  numero_personas: number;
+  fecha_reserva: string | null;
+  fecha_salida: string | null;
+  tour: {
+    id: number;
+    titulo: string;
+    ubicacion: string | null;
+    imagen_url: string | null;
+  } | null;
 }
 
-interface Resena {
-  id: number;
-  usuario_nombre: string;
-  comentario: string;
-  puntuacion: number;
-  creado_en: string;
-}
-
-interface TourDetalle {
-  id: number;
-  titulo: string;
-  descripcion: string | null;
-  ubicacion: string | null;
-  latitud: number | string | null;
-  longitud: number | string | null;
-  duracion_dias: number | null;
-  precio_base: number | string | null;
-  dificultad: string | null;
-  cupo_maximo: number | null;
-  imagen_url: string | null;
-  salidas_programadas?: SalidaProgramada[];
-  resenas?: Resena[];
-}
-
-export default function ExperienciaDetalle() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+export default function MisReservas() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
-  const [tour, setTour] = useState<TourDetalle | null>(null);
+  const [reservas, setReservas] = useState<Reserva[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 🔽 Estados para reserva
-  const [salidaSeleccionada, setSalidaSeleccionada] = useState<number | null>(
-    null
-  );
-  const [numeroPersonas, setNumeroPersonas] = useState<number>(1);
-  const [notas, setNotas] = useState("");
-  const [reservaLoading, setReservaLoading] = useState(false);
-  const [reservaError, setReservaError] = useState<string | null>(null);
-
+  // Si no hay usuario logueado, invitamos a iniciar sesión
   useEffect(() => {
-    if (!id) return;
-
-    async function fetchTour() {
+    if (!user) return;
+    async function fetchReservas() {
       try {
         setLoading(true);
         setError(null);
 
-        const data = await apiGet<TourDetalle>(`"/tours/${id}"`.replace('""', ""));
-        setTour(data);
+        // GET /api/reservas/mias
+        const apiReservas = await apiGet<any[]>("/reservas/mias");
+
+        // Adaptamos la respuesta de la API a nuestro tipo Reserva
+        const parsed: Reserva[] = apiReservas.map((r) => {
+          const tour = r.tour || r.tours || null;
+          const salida = r.salida_programada || r.salida || null;
+
+          return {
+            id: r.id,
+            estado: r.estado ?? "pendiente",
+            numero_personas: r.numero_personas ?? r.num_personas ?? 1,
+            fecha_reserva:
+              r.fecha_reserva || r.creado_en || r.createdAt || null,
+            fecha_salida:
+              r.fecha_salida ||
+              (salida && (salida.fecha_inicio || salida.fecha)) ||
+              null,
+            tour: tour
+              ? {
+                  id: tour.id,
+                  titulo: tour.titulo ?? "Experiencia",
+                  ubicacion: tour.ubicacion ?? null,
+                  imagen_url: tour.imagen_url ?? null,
+                }
+              : null,
+          };
+        });
+
+        setReservas(parsed);
       } catch (err) {
-        console.error(err);
-        setError("No se ha podido cargar esta experiencia.");
+        console.error("Error cargando mis reservas:", err);
+        setError(
+          "No se han podido cargar tus reservas. Inténtalo de nuevo más tarde."
+        );
       } finally {
         setLoading(false);
       }
     }
 
-    fetchTour();
-  }, [id]);
+    fetchReservas();
+  }, [user]);
 
-  // 🟡 Enviar solicitud de reserva
-  const handleReservaClick = async () => {
-    if (!tour) return;
+  const formatFecha = (iso: string | null) => {
+    if (!iso) return "Pendiente de concretar";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "Fecha no disponible";
+    return d.toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
 
-    // Si no hay sesión, redirigimos a login con redirect
-    if (!user) {
-      navigate(`/login?redirect=/experiencias/${tour.id}`);
-      return;
-    }
-
-    // Validaciones básicas
-    if (!salidaSeleccionada) {
-      setReservaError("Selecciona una fecha antes de reservar.");
-      return;
-    }
-
-    if (numeroPersonas <= 0) {
-      setReservaError("Introduce un número de personas válido.");
-      return;
-    }
-
-    try {
-      setReservaLoading(true);
-      setReservaError(null);
-
-      // 🔥 Llamada real al backend → POST /api/reservas
-      await apiPost("/reservas", {
-        tour_id: tour.id,
-        salida_programada_id: salidaSeleccionada,
-        numero_personas: numeroPersonas,
-        notas: notas.trim() || undefined,
-      });
-
-      // Si todo OK → ir a Mis reservas
-      navigate("/mis-reservas");
-    } catch (err) {
-      console.error("Error al crear la reserva:", err);
-      setReservaError(
-        err instanceof Error
-          ? err.message
-          : "No se ha podido crear la reserva. Inténtalo de nuevo."
-      );
-    } finally {
-      setReservaLoading(false);
+  const formatEstado = (estado: string) => {
+    switch (estado) {
+      case "confirmada":
+        return "Confirmada";
+      case "cancelada":
+        return "Cancelada";
+      default:
+        return "Pendiente de confirmar";
     }
   };
+
+  if (!user) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-10 text-sm text-gray-200">
+        <p className="mb-3">
+          Debes iniciar sesión para ver tus reservas.
+        </p>
+        <button
+          onClick={() => navigate("/login?redirect=/mis-reservas")}
+          className="px-5 py-2 rounded-full text-sm font-semibold"
+          style={{ backgroundColor: gold, color: "#000" }}
+        >
+          Iniciar sesión
+        </button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-10 text-sm text-gray-300">
-        Cargando experiencia...
+        Cargando tus reservas...
       </div>
     );
   }
 
-  if (error || !tour) {
+  if (error) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-10 text-sm text-red-400">
-        {error || "No se ha encontrado esta experiencia."}
+        {error}
       </div>
     );
   }
 
-  const precio =
-    tour.precio_base !== null && tour.precio_base !== undefined
-      ? Number(tour.precio_base)
-      : null;
-
-  const lat =
-    tour.latitud !== null && tour.latitud !== undefined
-      ? Number(tour.latitud)
-      : null;
-
-  const lng =
-    tour.longitud !== null && tour.longitud !== undefined
-      ? Number(tour.longitud)
-      : null;
-
-  const salidas = tour.salidas_programadas ?? [];
-  const resenas = tour.resenas ?? [];
+  if (reservas.length === 0) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-10 text-sm text-gray-200">
+        <h1 className="text-xl font-semibold mb-3">Mis reservas</h1>
+        <p className="mb-4">
+          Todavía no tienes ninguna reserva. Cuando solicites una experiencia,
+          aparecerá aquí.
+        </p>
+        <button
+          onClick={() => navigate("/experiencias")}
+          className="px-5 py-2 rounded-full text-sm font-semibold"
+          style={{ backgroundColor: gold, color: "#000" }}
+        >
+          Explorar experiencias
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 text-white">
-      {/* HEADER */}
-      <section className="mb-6">
-        <button
-          className="text-xs text-gray-300 mb-3 underline underline-offset-4"
-          onClick={() => navigate(-1)}
-        >
-          ← Volver
-        </button>
+    <div className="max-w-5xl mx-auto px-4 py-8 text-white">
+      <h1 className="text-xl md:text-2xl font-semibold mb-4">
+        Mis reservas
+      </h1>
 
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-gray-400 mb-1">
-              Experiencia · {tour.ubicacion || "Ubicación por confirmar"}
-            </p>
-            <h1 className="text-2xl md:text-3xl font-bold mb-1">
-              {tour.titulo}
-            </h1>
-            <div className="flex flex-wrap gap-2 text-[11px] text-gray-200">
-              {tour.dificultad && (
-                <span className="px-2 py-1 rounded-full bg-[#111] border border-[#333]">
-                  Dificultad: {tour.dificultad}
-                </span>
-              )}
-              {tour.duracion_dias && (
-                <span className="px-2 py-1 rounded-full bg-[#111] border border-[#333]">
-                  {tour.duracion_dias} día
-                  {tour.duracion_dias > 1 ? "s" : ""}
-                </span>
-              )}
-              {tour.cupo_maximo && (
-                <span className="px-2 py-1 rounded-full bg-[#111] border border-[#333]">
-                  Grupo máx. {tour.cupo_maximo} personas
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="text-right">
-            {precio !== null && (
-              <p className="text-sm text-gray-300">
-                Desde{" "}
-                <span className="text-xl font-semibold" style={{ color: gold }}>
-                  {precio.toFixed(0)} €
-                </span>{" "}
-                por persona
-              </p>
-            )}
-            <button
-              onClick={handleReservaClick}
-              disabled={reservaLoading}
-              className="mt-2 px-6 py-2 rounded-full text-sm font-semibold shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{ backgroundColor: gold, color: "#000" }}
+      <div className="space-y-4">
+        {reservas.map((r) => {
+          const tour = r.tour;
+          return (
+            <article
+              key={r.id}
+              className="rounded-2xl border border-[#222] bg-[#050505] p-3 flex gap-3"
             >
-              {reservaLoading ? "Enviando solicitud..." : "Solicitar reserva"}
-            </button>
-            <p className="text-[11px] text-gray-400 mt-1">
-              No se realiza ningún pago online. Confirmamos por contacto
-              directo.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* GALERÍA + MAPA */}
-      <section className="grid gap-4 md:grid-cols-3 mb-8">
-        <div className="md:col-span-2 rounded-2xl overflow-hidden bg-[#111] border border-[#222] h-64 md:h-80">
-          {tour.imagen_url ? (
-            <img
-              src={tour.imagen_url}
-              alt={tour.titulo}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-xs text-gray-500">
-              Foto principal pendiente
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl bg-[#050505] border border-[#222] p-4 text-sm">
-          <h2 className="text-base font-semibold mb-2">Mapa aproximado</h2>
-          {lat !== null && lng !== null ? (
-            <div className="w-full h-40 rounded-lg overflow-hidden bg-[#111] flex items-center justify-center text-xs text-gray-300">
-              <p>
-                Coordenadas: {lat.toFixed(4)}, {lng.toFixed(4)}
-              </p>
-            </div>
-          ) : (
-            <div className="w-full h-40 rounded-lg bg-[#111] flex items-center justify-center text-xs text-gray-500">
-              Coordenadas pendientes
-            </div>
-          )}
-          <p className="text-[11px] text-gray-400 mt-2">
-            Mostramos una zona aproximada para proteger la tranquilidad de la
-            fauna y evitar masificación.
-          </p>
-        </div>
-      </section>
-
-      {/* DESCRIPCIÓN + INFO RÁPIDA */}
-      <section className="grid gap-8 md:grid-cols-3 mb-10">
-        <div className="md:col-span-2">
-          <h2 className="text-lg font-semibold mb-2">Descripción</h2>
-          <p className="text-sm text-gray-200 whitespace-pre-line">
-            {tour.descripcion || "Descripción pendiente de completar."}
-          </p>
-        </div>
-
-        <div className="bg-[#050505] border border-[#222] rounded-2xl p-4 text-sm">
-          <h3 className="text-base font-semibold mb-2">
-            Información esencial
-          </h3>
-          <ul className="space-y-1 text-gray-200 text-sm">
-            {tour.duracion_dias && (
-              <li>• Duración: {tour.duracion_dias} día(s)</li>
-            )}
-            {tour.dificultad && <li>• Dificultad: {tour.dificultad}</li>}
-            {tour.cupo_maximo && (
-              <li>• Grupo máximo: {tour.cupo_maximo} personas</li>
-            )}
-            {tour.ubicacion && <li>• Zona principal: {tour.ubicacion}</li>}
-            <li>• Idioma: Español (otros idiomas próximamente)</li>
-          </ul>
-        </div>
-      </section>
-
-      {/* CALENDARIO / SALIDAS PROGRAMADAS */}
-      <section id="calendario" className="mb-10">
-        <h2 className="text-lg font-semibold mb-3">
-          Fechas disponibles y plazas
-        </h2>
-
-        {salidas.length === 0 ? (
-          <p className="text-sm text-gray-300">
-            Aún no hay salidas programadas visibles. Si te interesa esta
-            experiencia, contáctanos y te avisamos de las próximas fechas.
-          </p>
-        ) : (
-          <>
-            <div className="space-y-3">
-              {salidas.map((s) => {
-                const fecha = new Date(s.fecha);
-                const plazasLibres = s.plazas_disponibles;
-
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setSalidaSeleccionada(s.id)}
-                    className={`w-full flex items-center justify-between text-left px-3 py-2 rounded-lg border text-sm ${
-                      salidaSeleccionada === s.id
-                        ? "border-[#B8860B] bg-[#1a1305]"
-                        : "border-[#333] bg-[#050505]"
-                    }`}
-                  >
-                    <div>
-                      <p className="font-medium">
-                        {fecha.toLocaleDateString("es-ES", {
-                          weekday: "short",
-                          day: "2-digit",
-                          month: "short",
-                        })}{" "}
-                        ·{" "}
-                        {fecha.toLocaleTimeString("es-ES", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                      <p className="text-xs text-gray-300">
-                        Salida programada con guía experto
-                      </p>
-                    </div>
-                    <div className="text-right text-xs">
-                      <p>
-                        Plazas libres:{" "}
-                        <span className="font-semibold">{plazasLibres}</span>
-                      </p>
-                      {tour.cupo_maximo && (
-                        <p className="text-[11px] text-gray-400">
-                          Cupo máx. {tour.cupo_maximo}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Formulario mini: nº personas + notas */}
-            <div className="mt-4 grid md:grid-cols-2 gap-4 text-sm text-gray-200">
-              <div>
-                <label className="block text-[11px] uppercase text-gray-400 mb-1">
-                  Número de personas
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  className="w-full rounded-lg px-3 py-2 bg-black/70 border border-gray-600 text-sm focus:outline-none focus:border-gray-300"
-                  value={numeroPersonas}
-                  onChange={(e) => setNumeroPersonas(Number(e.target.value))}
-                />
+              <div className="w-28 h-24 rounded-xl overflow-hidden bg-black flex-shrink-0">
+                {tour?.imagen_url ? (
+                  <img
+                    src={tour.imagen_url}
+                    alt={tour.titulo}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-[11px] text-gray-500">
+                    Sin foto
+                  </div>
+                )}
               </div>
-              <div>
-                <label className="block text-[11px] uppercase text-gray-400 mb-1">
-                  Notas opcionales (alergias, nivel, dudas…)
-                </label>
-                <textarea
-                  rows={3}
-                  className="w-full rounded-lg px-3 py-2 bg-black/70 border border-gray-600 text-sm focus:outline-none focus:border-gray-300 resize-none"
-                  value={notas}
-                  onChange={(e) => setNotas(e.target.value)}
-                />
-              </div>
-            </div>
 
-            {salidaSeleccionada && (
-              <div className="mt-3 text-xs text-gray-300">
-                Has seleccionado una fecha. Al solicitar la reserva confirmaremos tu
-                plaza por email o WhatsApp.
-              </div>
-            )}
-
-            {reservaError && (
-              <p className="mt-3 text-sm text-red-400">{reservaError}</p>
-            )}
-          </>
-        )}
-      </section>
-
-      {/* IMPACTO POSITIVO */}
-      <section className="mb-10">
-        <h2 className="text-lg font-semibold mb-2">
-          Impacto positivo de esta experiencia
-        </h2>
-        <p className="text-sm text-gray-200 mb-2">
-          Parte de los beneficios de esta salida se destinan a proyectos de
-          conservación en la zona donde se realiza la actividad.
-        </p>
-        <ul className="text-sm text-gray-200 space-y-1">
-          <li>• Apoyo a proyectos de seguimiento de fauna y hábitats.</li>
-          <li>• Colaboración con guías locales y economía de la zona.</li>
-          <li>• Grupos reducidos para minimizar el impacto sobre el entorno.</li>
-        </ul>
-      </section>
-
-      {/* RESEÑAS */}
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-3">Reseñas de viajeros</h2>
-
-        {resenas.length === 0 ? (
-          <p className="text-sm text-gray-300">
-            Todavía no hay reseñas para esta experiencia. ¡Puedes ser de los
-            primeros en vivirla!
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {resenas.map((r) => (
-              <article
-                key={r.id}
-                className="bg-[#050505] border border-[#222] rounded-2xl p-3 text-sm"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <p className="font-semibold text-sm">
-                    {r.usuario_nombre || "Viajero"}
-                  </p>
-                  <p className="text-xs text-yellow-400">
-                    {"★".repeat(r.puntuacion)}{" "}
-                    <span className="text-gray-400">
-                      ({r.puntuacion.toFixed(1)})
+              <div className="flex-1 text-sm">
+                <div className="flex justify-between gap-2 mb-1">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-gray-400">
+                      {tour?.ubicacion || "Experiencia"}
+                    </p>
+                    <h2 className="font-semibold text-base">
+                      {tour?.titulo || "Experiencia sin título"}
+                    </h2>
+                  </div>
+                  <div className="text-right text-xs">
+                    <span
+                      className="px-2 py-1 rounded-full border text-[11px]"
+                      style={{
+                        borderColor:
+                          r.estado === "confirmada" ? gold : "#444",
+                        color:
+                          r.estado === "confirmada" ? gold : "#ccc",
+                      }}
+                    >
+                      {formatEstado(r.estado)}
                     </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs text-gray-300 mb-1">
+                  <p>
+                    <span className="text-gray-400">Fecha salida: </span>
+                    {formatFecha(r.fecha_salida)}
+                  </p>
+                  <p>
+                    <span className="text-gray-400">Personas: </span>
+                    {r.numero_personas}
+                  </p>
+                  <p>
+                    <span className="text-gray-400">
+                      Fecha de solicitud:{" "}
+                    </span>
+                    {formatFecha(r.fecha_reserva)}
                   </p>
                 </div>
-                <p className="text-xs text-gray-300 mb-1 whitespace-pre-line">
-                  {r.comentario}
-                </p>
-                <p className="text-[10px] text-gray-500">
-                  {new Date(r.creado_en).toLocaleDateString("es-ES")}
-                </p>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+
+                <div className="flex justify-between items-center mt-1">
+                  <button
+                    className="text-[11px] underline underline-offset-4 text-gray-300"
+                    onClick={() =>
+                      tour && navigate(`/experiencias/${tour.id}`)
+                    }
+                  >
+                    Ver experiencia
+                  </button>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
     </div>
   );
 }
