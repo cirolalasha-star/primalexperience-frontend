@@ -38,7 +38,7 @@ interface TourDetalle {
 }
 
 export default function ExperienciaDetalle() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -56,25 +56,26 @@ export default function ExperienciaDetalle() {
   const [reservaError, setReservaError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id) return;
+  if (!id) return;
 
-    async function fetchTour() {
-      try {
-        setLoading(true);
-        setError(null);
+  async function fetchTour() {
+    try {
+      setLoading(true);
+      setError(null);
 
-        const data = await apiGet<TourDetalle>(`"/tours/${id}"`.replace('""', ""));
-        setTour(data);
-      } catch (err) {
-        console.error(err);
-        setError("No se ha podido cargar esta experiencia.");
-      } finally {
-        setLoading(false);
-      }
+      const data = await apiGet<TourDetalle>(`/tours/${id}`);
+      setTour(data);
+    } catch (err) {
+      console.error(err);
+      setError("No se ha podido cargar esta experiencia.");
+    } finally {
+      setLoading(false);
     }
+  }
 
-    fetchTour();
-  }, [id]);
+  fetchTour();
+}, [id]);
+
 
   // 🟡 Enviar solicitud de reserva
   const handleReservaClick = async () => {
