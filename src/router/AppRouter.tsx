@@ -26,7 +26,7 @@ import MisReservas from "../pages/MisReservas";
 import DashboardAdmin from "../pages/admin/DashboardAdmin";
 // (cuando tengas estas páginas, las importas y añades rutas)
 // import AdminExperiencias from "../pages/admin/AdminExperiencias";
-// import AdminReservas from "../pages/admin/AdminReservas";
+import AdminReservas from "../pages/admin/AdminReservas";
 // import AdminUsuarios from "../pages/admin/AdminUsuarios";
 // import AdminContenido from "../pages/admin/AdminContenido";
 
@@ -88,9 +88,10 @@ export default function AppRouter() {
       {/* 🛠 ÁREA ADMIN */}
       <Route path="/admin" element={<AdminLayout />}>
         <Route path="dashboard" element={<DashboardAdmin />} />
+        <Route path="reservas" element={<AdminReservas />} />
         {/*
         <Route path="experiencias" element={<AdminExperiencias />} />
-        <Route path="reservas" element={<AdminReservas />} />
+        
         <Route path="usuarios" element={<AdminUsuarios />} />
         <Route path="contenido" element={<AdminContenido />} />
         */}

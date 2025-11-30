@@ -1,91 +1,64 @@
 // src/api/client.ts
-// -------------------------------
-// Este archivo centraliza todas las llamadas HTTP a tu backend.
-// Así, si cambias la URL o agregas headers, solo lo haces aquí.
+const BASE_URL =
+  import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
 
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
-
-/**
- * Hace una petición GET a la API.
- */
-export async function apiGet<T>(endpoint: string): Promise<T> {
-  const headers: Record<string, string> = {
+async function request<T>(
+  endpoint: string,
+  method: HttpMethod,
+  body?: unknown,
+  requireAuth = false
+): Promise<T> {
+  const headers: HeadersInit = {
     "Content-Type": "application/json",
   };
 
   const token = localStorage.getItem("token");
-  if (token) {
+  if (requireAuth && token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
   const res = await fetch(`${BASE_URL}${endpoint}`, {
+    method,
     headers,
+    body: body ? JSON.stringify(body) : undefined,
+    credentials: "include",
   });
 
   if (!res.ok) {
     const msg = await res.text();
-    throw new Error(`Error ${res.status}: ${msg}`);
+    throw new Error(msg || `Error ${res.status}`);
+  }
+
+  // 👇 SI ES 204 (No Content), devolvemos null y no intentamos parsear JSON
+  if (res.status === 204 || res.headers.get("Content-Length") === "0") {
+    return null as T;
   }
 
   return (await res.json()) as T;
 }
 
-
-/**
- * Hace una petición POST a la API.
- */
-export async function apiPost<T>(endpoint: string, data: any): Promise<T> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-
-  const token = localStorage.getItem("token");
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  const res = await fetch(`${BASE_URL}${endpoint}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    // ⬇️ Intentamos sacar un mensaje útil del backend
-    let message = `Error ${res.status}`;
-
-    try {
-      const text = await res.text();
-      if (text) {
-        try {
-          const json = JSON.parse(text);
-          message = json.message ?? text;
-        } catch {
-          message = text;
-        }
-      }
-    } catch {
-      // si algo falla aquí dejamos el mensaje por defecto
-    }
-
-    throw new Error(message);
-  }
-
-  return (await res.json()) as T;
+export function apiGet<T>(endpoint: string, requireAuth = false) {
+  return request<T>(endpoint, "GET", undefined, requireAuth);
 }
 
+export function apiPost<T>(
+  endpoint: string,
+  body?: unknown,
+  requireAuth = true
+) {
+  return request<T>(endpoint, "POST", body, requireAuth);
+}
 
+export function apiPatch<T>(
+  endpoint: string,
+  body?: unknown,
+  requireAuth = true
+) {
+  return request<T>(endpoint, "PATCH", body, requireAuth);
+}
 
-
-/**
- * BASE_URL: toma tu URL del backend en Render (VITE_API_URL), o usa localhost en desarrollo.
-
-apiGet y apiPost: funciones reutilizables para no escribir fetch en cada componente.
-
-Usan genéricos <T> en TypeScript → las respuestas quedan tipadas según el modelo que pidas.
-
-Con Esto:
-  ·En desarrollo, uso .env.local con http://localhost:3000/api
-  ·En producción, uso .env (o variables en Vercel) con https://mi-app-reservas-bceb.onrender.com/api
- */
+export function apiDelete<T>(endpoint: string, requireAuth = true) {
+  return request<T>(endpoint, "DELETE", undefined, requireAuth);
+}

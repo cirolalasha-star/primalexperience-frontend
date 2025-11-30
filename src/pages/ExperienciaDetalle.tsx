@@ -8,9 +8,9 @@ const gold = "#B8860B";
 
 interface SalidaProgramada {
   id: number;
-  fecha_inicio: string;      // ISO (viene de salidas_programadas.fecha_inicio)
-  plazas_totales: number;    // salidas_programadas.plazas_totales
-  plazas_ocupadas: number;   // salidas_programadas.plazas_ocupadas
+  fecha_inicio: string;      // ISO
+  plazas_totales: number;
+  plazas_ocupadas: number;
 }
 
 interface Resena {
@@ -46,7 +46,7 @@ export default function ExperienciaDetalle() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Estado reserva
+  // Estados de reserva
   const [salidaSeleccionada, setSalidaSeleccionada] = useState<number | null>(
     null
   );
@@ -55,6 +55,9 @@ export default function ExperienciaDetalle() {
   const [reservaLoading, setReservaLoading] = useState(false);
   const [reservaError, setReservaError] = useState<string | null>(null);
 
+  // ============================
+  // Carga del tour por ID
+  // ============================
   useEffect(() => {
     if (!id) return;
 
@@ -76,7 +79,9 @@ export default function ExperienciaDetalle() {
     fetchTour();
   }, [id]);
 
+  // ============================
   // Enviar solicitud de reserva
+  // ============================
   const handleReservaClick = async () => {
     if (!tour) return;
 
@@ -95,10 +100,8 @@ export default function ExperienciaDetalle() {
       return;
     }
 
-    // Validar plazas libres también en el front
     const salidas = tour.salidas_programadas ?? [];
     const salida = salidas.find((s) => s.id === salidaSeleccionada);
-
     if (!salida) {
       setReservaError("No hemos podido encontrar esa salida.");
       return;
@@ -145,6 +148,9 @@ export default function ExperienciaDetalle() {
     }
   };
 
+  // ============================
+  // Estados de carga / error
+  // ============================
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-10 text-sm text-gray-300">
@@ -161,6 +167,9 @@ export default function ExperienciaDetalle() {
     );
   }
 
+  // ============================
+  // Datos derivados
+  // ============================
   const precio =
     tour.precio_base !== null && tour.precio_base !== undefined
       ? Number(tour.precio_base)
@@ -179,11 +188,9 @@ export default function ExperienciaDetalle() {
   const salidas = tour.salidas_programadas ?? [];
   const resenas = tour.resenas ?? [];
 
-  // Salida seleccionada y máximo permitido según plazas libres
   const salidaSeleccionadaObj = salidas.find(
     (s) => s.id === salidaSeleccionada
   );
-
   const maxPersonasSeleccionadas =
     salidaSeleccionadaObj
       ? Math.max(
@@ -193,6 +200,9 @@ export default function ExperienciaDetalle() {
         )
       : undefined;
 
+  // ============================
+  // Render
+  // ============================
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 text-white">
       {/* HEADER */}
@@ -341,14 +351,17 @@ export default function ExperienciaDetalle() {
                   0,
                   (s.plazas_totales ?? 0) - (s.plazas_ocupadas ?? 0)
                 );
+                const sinPlazas = plazasLibres <= 0;
+                const seleccionada = salidaSeleccionada === s.id;
 
                 return (
                   <button
                     key={s.id}
                     type="button"
+                    disabled={sinPlazas}
                     onClick={() => {
+                      if (sinPlazas) return;
                       setSalidaSeleccionada(s.id);
-                      // ajustar nº personas al máximo disponible
                       setNumeroPersonas((prev) => {
                         if (plazasLibres <= 0) return 1;
                         if (!prev || prev < 1) return 1;
@@ -356,10 +369,10 @@ export default function ExperienciaDetalle() {
                       });
                     }}
                     className={`w-full flex items-center justify-between text-left px-3 py-2 rounded-lg border text-sm ${
-                      salidaSeleccionada === s.id
+                      seleccionada
                         ? "border-[#B8860B] bg-[#1a1305]"
                         : "border-[#333] bg-[#050505]"
-                    }`}
+                    } ${sinPlazas ? "opacity-60 cursor-not-allowed" : ""}`}
                   >
                     <div>
                       <p className="font-medium">
@@ -377,6 +390,11 @@ export default function ExperienciaDetalle() {
                       <p className="text-xs text-gray-300">
                         Salida programada con guía experto
                       </p>
+                      {sinPlazas && (
+                        <p className="text-xs text-red-400 mt-1">
+                          Sin plazas disponibles
+                        </p>
+                      )}
                     </div>
                     <div className="text-right text-xs">
                       <p>
@@ -407,14 +425,22 @@ export default function ExperienciaDetalle() {
                   className="w-full rounded-lg px-3 py-2 bg-black/70 border border-gray-600 text-sm focus:outline-none focus:border-gray-300"
                   value={numeroPersonas}
                   onChange={(e) => {
-                    const value = Number(e.target.value);
+                    const raw = e.target.value;
+                    const value = Number(raw);
+
+                    if (!raw) {
+                      setNumeroPersonas(1);
+                      return;
+                    }
+
                     if (!maxPersonasSeleccionadas) {
                       setNumeroPersonas(value);
                       return;
                     }
+
                     const clamped = Math.max(
                       1,
-                      Math.min(maxPersonasSeleccionadas, value)
+                      Math.min(maxPersonasSeleccionadas, value || 1)
                     );
                     setNumeroPersonas(clamped);
                   }}
